@@ -240,24 +240,33 @@ html, body {
  * the card drops the decorative wave and some height to fit. */
 @media (max-width: 767px) {
   /* the whole panel (copy + card) stays hidden while the hero animation
-     plays, and fades in once sequence.js marks it revealed — so the
-     animation has the screen to itself first. Desktop shows it right away. */
-  .panel {
+     plays, and its two pieces reveal one after another once sequence.js
+     marks it revealed — so the animation has the screen to itself first,
+     and the panel doesn't pop in as one flat block. Desktop shows both
+     right away (no gating needed there). */
+  .panel { pointer-events: none; }
+  .panel.is-revealed { pointer-events: auto; }
+
+  .lede {
     opacity: 0;
-    transform: translateY(12px);
-    pointer-events: none;
-    transition: opacity 700ms ease, transform 700ms ease;
+    transform: translateY(24px);
+    transition: opacity 800ms cubic-bezier(0.16, 1, 0.3, 1),
+                transform 800ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .panel.is-revealed {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
+  .panel.is-revealed .lede { opacity: 1; transform: translateY(0); }
 
   .card {
     height: 360px;
     padding: 1.5rem;
     justify-content: flex-start;
+    /* don't play the entrance invisibly at page load — replayed below,
+       staggered after .lede, once the panel is actually revealed */
+    opacity: 0;
+    animation: none;
+  }
+  .panel.is-revealed .card {
+    opacity: 1;
+    animation: fade-slide-up-card 900ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
   }
   .card__body { margin-top: 0.85rem; }
   .card__wave { display: none; }
