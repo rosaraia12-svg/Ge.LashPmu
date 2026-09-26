@@ -67,9 +67,15 @@ html, body {
      signature, not a wide mostly-empty box: sequence.js sizes the canvas
      off *this* box, so a tight box means its resolution is spent on the
      drawing instead of blank margin, which is what was making it look
-     grainy. Fixed pixel size/offset (not vh/%) keeps it legible and
-     consistently placed regardless of window height. */
-  .script-stage { top: auto; bottom: -20px; left: 4%; width: 440px; height: 247px; }
+     grainy.
+     Anchored from the TOP now, not the bottom: measured directly against
+     a frozen frame, the eye's lower lash line sits at ~639px on a 1440x820
+     window, so 660px clears it with a real gap. Anchoring from the bottom
+     coupled the box's size to how much of it could safely go off-screen,
+     which is what pushed the signature up onto the eye last time. Here
+     the box is free to run past the bottom edge (only the decorative
+     tail, if anything, is affected) — clearing the eye is what matters. */
+  .script-stage { top: 660px; bottom: auto; left: 4%; width: 440px; height: 248px; }
 }
 
 /* frame source only — never actually shown */
