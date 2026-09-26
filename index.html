@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ge.LashPmu — Extension, laminazione e PMU sopracciglia</title>
+  <meta name="description" content="Ge.LashPmu: extension ciglia, laminazione ciglia e sopracciglia, dermopigmentazione sopracciglia. Uno sguardo su misura, trattamento dopo trattamento." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://db.onlinewebfonts.com/c/0e6de1ec911a2e267ff136bbdd384a44?family=Helvetica+Neue+Light" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- plays once, then freezes on the final open-eye frame (no loop) -->
+  <video id="bg-video" class="bg-video" aria-hidden="true"
+         autoplay muted playsinline preload="auto"
+         src="./hero.mp4"></video>
+
+  <!-- second act: cursive signature, revealed + played once the eye ends.
+       The source video is white ink on black. Instead of CSS
+       mix-blend-mode (unreliable on Safari — it was showing the black
+       background as a solid box instead of dropping it), sequence.js
+       draws each video frame into #script-canvas and rewrites its own
+       pixel alpha from luminance: black becomes truly transparent, white
+       stays opaque. That is plain canvas compositing, which every
+       browser handles the same way. #script-video itself is never shown
+       (kept tiny/invisible, used only as a frame source). #script-fallback
+       is the frozen final frame (same keying, done once with ffmpeg) shown
+       if the clip can't play. Both the canvas and the fallback freeze on
+       the last frame. -->
+  <div id="script-stage" class="script-stage" aria-hidden="true">
+    <video id="script-video" class="script-video-source"
+           muted playsinline preload="auto"
+           src="./handwriting.mp4"></video>
+    <canvas id="script-canvas" class="script-canvas"></canvas>
+    <img id="script-fallback" class="script-fallback" src="./handwriting-final.png" alt="" />
+  </div>
+
+  <svg class="glass-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="liquid-glass-refraction"
+              x="-30%" y="-30%" width="160%" height="160%"
+              color-interpolation-filters="sRGB">
+
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.015" numOctaves="3" result="noise" />
+
+        <feColorMatrix in="SourceAlpha" type="matrix" result="boosted_alpha"
+          values="0 0 0 0 0
+                  0 0 0 0 0
+                  0 0 0 0 0
+                  0 0 0 100 0" />
+
+        <feGaussianBlur in="boosted_alpha" stdDeviation="45" result="blurred_alpha" />
+
+        <feComponentTransfer in="blurred_alpha" result="edge_mask">
+          <feFuncA type="linear" slope="-1.3" intercept="1" />
+        </feComponentTransfer>
+
+        <feComposite in="noise" in2="edge_mask" operator="arithmetic"
+                     k1="1" k2="0" k3="0" k4="0" result="masked_noise" />
+
+        <!-- single displacement pass: edge-weighted refraction, no per-channel
+             split, so there is no chromatic aberration / rainbow fringing -->
+        <feDisplacementMap in="SourceGraphic" in2="masked_noise" scale="56"
+                           xChannelSelector="R" yChannelSelector="G" result="refracted" />
+      </filter>
+    </defs>
+  </svg>
+
+  <main class="hero">
+    <div class="rule rule--left" aria-hidden="true">
+      <span class="rule__seg rule__seg--end"></span>
+      <span class="rule__plus">+</span>
+      <span class="rule__seg rule__seg--mid"></span>
+      <span class="rule__plus">+</span>
+      <span class="rule__seg rule__seg--end"></span>
+    </div>
+    <div class="rule rule--right" aria-hidden="true">
+      <span class="rule__seg rule__seg--end"></span>
+      <span class="rule__plus">+</span>
+      <span class="rule__seg rule__seg--mid"></span>
+      <span class="rule__plus">+</span>
+      <span class="rule__seg rule__seg--end"></span>
+    </div>
+
+    <nav class="nav">
+      <span class="nav__brand">Ge.LashPmu</span>
+      <a class="nav__item" href="https://instagram.com/ge.lashpmu" target="_blank" rel="noopener">
+        <span class="nav__dot"></span>
+        <span class="nav__label">Prenota ora</span>
+      </a>
+    </nav>
+
+    <div class="hero-bottom">
+      <!-- id="intro-panel": on mobile this whole panel stays hidden until
+           the hero animation ends (see sequence.js) so the animation plays
+           uninterrupted first; on desktop it is always visible, grouped
+           on the right so the left side stays clear for the animation. -->
+      <div class="panel" id="intro-panel">
+      <div class="lede">
+        <h1 class="lede__title">Uno sguardo<br />su misura</h1>
+        <p class="lede__body">
+          Extension ciglia, laminazione ciglia e sopracciglia, trucco
+          permanente: trattamenti su misura per uno sguardo intenso,
+          che dura nel tempo.
+        </p>
+      </div>
+
+      <aside class="card group" data-glass-card>
+        <div id="dup-video-container"><canvas id="dup-image"></canvas></div>
+        <div class="card__frost" aria-hidden="true"></div>
+
+        <div class="card__head">
+          <h2 class="card__title">Il listino</h2>
+          <span class="card__index">//02</span>
+        </div>
+
+        <div class="card__body">
+          <div class="finding">
+            <h3 class="finding__title">Extension ciglia</h3>
+            <p class="finding__text">One to one, volume 2D-5D o megavolume: da €60, con ritocco da €50.</p>
+          </div>
+          <div class="finding">
+            <h3 class="finding__title">Laminazione & PMU sopracciglia</h3>
+            <p class="finding__text">Laminazione ciglia e sopracciglia, definizione con tinta o dermopigmentazione: da €30.</p>
+          </div>
+        </div>
+
+        <svg class="card__wave" viewBox="0 0 220 50" fill="none" aria-hidden="true">
+          <path d="M0 30 C10 30 12 45 18 45 C24 45 26 10 34 10 C42 10 44 40 52 40 C60 40 62 5 70 5 C78 5 80 42 88 42 C96 42 98 15 106 15 C114 15 116 38 124 38 C132 38 134 20 142 20 C150 20 152 35 160 35 C168 35 170 22 178 22 C186 22 188 32 196 32 C204 32 210 28 220 28"
+                stroke="#3b2228" stroke-width="1.8" stroke-linecap="round" fill="none" />
+        </svg>
+      </aside>
+      </div>
+    </div>
+  </main>
+
+  <script src="./glass-card.js" defer></script>
+  <script src="./sequence.js" defer></script>
+</body>
+</html>

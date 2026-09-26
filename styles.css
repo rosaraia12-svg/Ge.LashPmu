@@ -1,0 +1,277 @@
+/* ------------------------------------------------------------------ *
+ * Ge.LashPmu — Extension, laminazione e PMU sopracciglia
+ * Single-screen, non-scrolling hero. Full-bleed looping background
+ * video + real-time refractive "liquid glass" card.
+ * Palette: rosa / bianco. Testo prugna profondo (#3b2228).
+ * ------------------------------------------------------------------ */
+
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  overflow-x: hidden;
+  background: #efa7aa;               /* tuned to the video's own pink so any sub-pixel edge gap stays invisible */
+  color: #3b2228;
+  font-family: 'Helvetica Neue Light', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Breakpoints follow Tailwind: sm 640, md 768, lg 1024 — all min-width. */
+
+/* ---- Background video --------------------------------------------- */
+/* 100% opacity. No overlay, scrim, tint, gradient or darkening layer
+   over the video at any breakpoint — il video è già rosa. */
+.bg-video {
+  position: fixed; top: 0; left: 0;
+  display: block;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 1;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  /* Zoom the framing toward the left: the cards are opaque now, so
+     nothing needs to show through on the right, and the face can fill
+     more of the screen instead of leaving that side empty. scale()
+     zooms in (cropping the nose sliver at the far left edge along with
+     it); translateX then shifts the whole crop further left so the eye
+     itself sits further left on screen too. */
+  .bg-video { transform: scale(1.4) translateX(-12%); }
+}
+
+/* ---- Second-act cursive signature -------------------------------- *
+ * Sits above the eye video, below all UI. The source is white ink on
+ * black. sequence.js draws each frame into #script-canvas and rewrites
+ * the canvas's own pixel alpha from luminance (black -> transparent,
+ * white -> opaque) — plain alpha compositing, not CSS mix-blend-mode,
+ * because on Safari that mode was painting the black background as a
+ * solid box instead of dropping it. #script-video is only a frame
+ * source, kept out of view. Hidden until sequence.js reveals it when
+ * the eye ends. */
+.script-stage {
+  position: fixed; left: 0;
+  top: 45%;                         /* sit in the lower band, just under the eye */
+  width: 100%; height: 50vh;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+.script-stage.is-visible { opacity: 1; }
+@media (min-width: 768px) {
+  /* Sized to the source video's own 16:9 aspect and snug to the actual
+     signature, not a wide mostly-empty box: sequence.js sizes the canvas
+     off *this* box, so a tight box means its resolution is spent on the
+     drawing instead of blank margin, which is what was making it look
+     grainy. Fixed pixel size/offset (not vh/%) keeps it legible and
+     consistently placed regardless of window height. */
+  .script-stage { top: auto; bottom: 32px; left: 4%; width: 440px; height: 247px; }
+}
+
+/* frame source only — never actually shown */
+.script-video-source {
+  position: fixed; left: 0; top: 0;
+  width: 2px; height: 2px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.script-canvas, .script-fallback {
+  position: absolute; inset: 0;
+  display: block;
+  width: 100%; height: 100%;
+}
+.script-fallback { object-fit: contain; opacity: 0; transition: opacity 400ms ease; }
+.script-stage.use-fallback .script-canvas { visibility: hidden; }
+.script-stage.use-fallback .script-fallback { opacity: 1; }
+
+/* ---- Liquid-glass filter def ------------------------------------- */
+.glass-defs { position: absolute; width: 0; height: 0; pointer-events: none; }
+
+/* ---- Hero shell ------------------------------------------------- */
+.hero {
+  position: relative; z-index: 10;
+  display: flex; flex-direction: column;
+  width: 100%; height: 100vh; height: 100dvh;
+  color: #3b2228;
+  pointer-events: none;   /* only interactive children opt back in */
+}
+.icon { flex: none; }
+
+/* ---- Vertical rules (>=768px) --------------------------------- */
+.rule {
+  position: absolute; top: 0; bottom: 0;
+  display: none; flex-direction: column; align-items: center;
+}
+.rule--left  { left: 1.25rem; }
+.rule--right { right: 1.25rem; }
+.rule__seg { width: 1px; background: rgba(59, 34, 40, 0.2); }
+.rule__seg--end { height: 15%; }
+.rule__seg--mid { flex: 1 1 0%; }
+.rule__plus { font-size: 0.75rem; line-height: 1; color: rgba(59, 34, 40, 0.4); padding: 0.25rem 0; }
+@media (min-width: 768px) { .rule { display: flex; } }
+
+/* ---- Navbar --------------------------------------------------- */
+.nav {
+  position: relative; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.25rem;
+}
+.nav__item {
+  display: inline-flex; align-items: center; gap: 0.625rem;
+  color: #3b2228; background: none; border: 0; font: inherit; text-decoration: none;
+  cursor: pointer; pointer-events: auto; transition: opacity 300ms;
+}
+.nav__item:hover { opacity: 0.6; }
+.nav__label { font-size: 0.875rem; line-height: 1.25rem; letter-spacing: 0.025em; }
+.nav__brand { font-size: 0.875rem; line-height: 1.25rem; letter-spacing: 0.025em; color: #3b2228; }
+.nav__dot { width: 8px; height: 8px; border-radius: 9999px; background: #d98a9e; }
+
+@media (min-width: 640px) { .nav { padding: 1.25rem 1.5rem; } }
+@media (min-width: 768px) { .nav { padding: 1.5rem 3rem; } }
+
+/* ---- Bottom row ---------------------------------------------- */
+.hero-bottom {
+  position: relative; z-index: 2;
+  margin-top: auto;
+  display: flex; flex-direction: column; gap: 1.5rem;
+  padding: 0 1.25rem 1.5rem;   /* matches .nav so columns align with the navbar */
+}
+@media (min-width: 640px) { .hero-bottom { padding: 0 1.5rem 2rem; } }
+@media (min-width: 768px) {
+  .hero-bottom {
+    flex: 1; margin-top: 0;
+    flex-direction: row; align-items: center; justify-content: flex-end;
+    gap: 3rem; padding: 2rem 3rem 3rem;
+  }
+}
+
+/* ---- Right-side panel: copy + card, animation stays clear on the left */
+.panel {
+  display: flex; flex-direction: column; gap: 1.5rem;
+}
+@media (min-width: 768px) {
+  .panel { gap: 2rem; max-width: 24rem; }
+}
+
+/* ---- Copy ------------------------------------- *
+ * Solid card, not glass — sits over the busiest part of the eye/lash
+ * animation, so it stays opaque and legible at every breakpoint. */
+.lede {
+  max-width: 24rem;
+  padding: 1rem 1.15rem 1.25rem;
+  border: 1px solid rgba(59, 34, 40, 0.08);
+  border-radius: 22px;
+  background: #faf1f2;
+  box-shadow: 0 12px 32px rgba(59, 34, 40, 0.12);
+}
+.lede__title { font-size: 1.25rem; font-weight: 300; line-height: 1.25; letter-spacing: -0.025em; color: #3b2228; }
+.lede__body  { margin-top: 0.75rem; max-width: 280px; font-size: 0.75rem; line-height: 1.625; color: rgba(59, 34, 40, 0.72); }
+
+@media (min-width: 640px)  { .lede__title { font-size: 1.5rem; }   .lede__body { font-size: 0.875rem; } }
+@media (min-width: 768px)  {
+  .lede { padding: 1.5rem 1.75rem 1.75rem; border-radius: 28px; }
+  .lede__title { font-size: 1.875rem; } .lede__body { margin-top: 1rem; }
+}
+@media (min-width: 1024px) { .lede__title { font-size: 2.25rem; } }
+
+/* ---- Right column: listino card ---------------------- *
+ * Solid, not glass, so the text stays legible over the animation. The
+ * refraction canvas (#dup-image, driven by glass-card.js) still runs
+ * underneath but is fully covered by the opaque .card__frost — kept
+ * rather than torn out, in case a translucent look comes back later. */
+.card {
+  position: relative;
+  display: flex; flex-direction: column; justify-content: space-between;
+  width: 340px; max-width: 100%; height: 460px;
+  padding: 2rem;
+  border-radius: 48px;
+  overflow: hidden;                          /* clips the duplicate to the card */
+  background: transparent;
+  border: 1px solid rgba(120, 60, 75, 0.18);
+  box-shadow: 0 16px 40px rgba(59, 34, 40, 0.14);
+  pointer-events: auto;
+  animation: fade-slide-up-card 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes fade-slide-up-card {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* full-viewport-aligned copy of the backdrop; left/top/width/height
+   are written every frame by glass-card.js */
+#dup-video-container { position: absolute; left: 0; top: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+#dup-image { position: absolute; inset: 0; width: 100%; height: 100%; filter: url(#liquid-glass-refraction); }
+
+.card__frost {
+  position: absolute; inset: 0; z-index: 1;
+  border-radius: 48px; pointer-events: none;
+  background: #faf1f2;
+}
+
+.card__head, .card__body, .card__wave { position: relative; z-index: 2; }
+
+.card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+              padding-bottom: 0.75rem; border-bottom: 1px solid rgba(59, 34, 40, 0.1); }
+.card__title { font-size: 1rem; font-weight: 500; letter-spacing: -0.025em; }
+.card__index { font-size: 0.75rem; color: rgba(59, 34, 40, 0.4); }
+.card__body { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+.finding__title { font-size: 0.875rem; font-weight: 600; letter-spacing: -0.025em; }
+.finding__text { margin-top: 0.25rem; font-size: 0.75rem; line-height: 1.625; color: rgba(59, 34, 40, 0.72); }
+.card__wave { display: block; width: 100%; height: auto; margin-top: 1.25rem; }
+
+@media (min-width: 640px) { .card__title { font-size: 1.125rem; } }
+@media (min-width: 768px) {
+  .card__head { padding-bottom: 1rem; }
+  .card__title { font-size: 1.25rem; }
+  .card__body { gap: 1.25rem; margin-top: 1.25rem; }
+  .finding__title { font-size: 1rem; }
+  .finding__text { font-size: 0.875rem; margin-top: 0.375rem; }
+  .card__wave { margin-top: 1.5rem; }
+}
+
+/* ---- Mobile optimisation (<768px) ----------------------- *
+ * The cards are already opaque (base rules above); on top of that,
+ * small screens hide the whole panel until the animation ends, and
+ * the card drops the decorative wave and some height to fit. */
+@media (max-width: 767px) {
+  /* the whole panel (copy + card) stays hidden while the hero animation
+     plays, and fades in once sequence.js marks it revealed — so the
+     animation has the screen to itself first. Desktop shows it right away. */
+  .panel {
+    opacity: 0;
+    transform: translateY(12px);
+    pointer-events: none;
+    transition: opacity 700ms ease, transform 700ms ease;
+  }
+  .panel.is-revealed {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .card {
+    height: 360px;
+    padding: 1.5rem;
+    justify-content: flex-start;
+  }
+  .card__body { margin-top: 0.85rem; }
+  .card__wave { display: none; }
+
+  .script-stage {
+    top: auto;
+    bottom: 0.75rem;
+    left: 50%;
+    width: 260px;
+    height: 146px;                   /* same 16:9, snug box — see desktop rule */
+    transform: translateX(-50%);
+    z-index: 20;                     /* bottom lane, above the card */
+  }
+}
+
+/* ---- Reduced motion ------------------------------------- */
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; } }
