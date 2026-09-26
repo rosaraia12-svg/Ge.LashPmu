@@ -68,14 +68,16 @@ html, body {
      off *this* box, so a tight box means its resolution is spent on the
      drawing instead of blank margin, which is what was making it look
      grainy.
-     Anchored from the TOP now, not the bottom: measured directly against
-     a frozen frame, the eye's lower lash line sits at ~639px on a 1440x820
-     window, so 660px clears it with a real gap. Anchoring from the bottom
-     coupled the box's size to how much of it could safely go off-screen,
-     which is what pushed the signature up onto the eye last time. Here
-     the box is free to run past the bottom edge (only the decorative
-     tail, if anything, is affected) — clearing the eye is what matters. */
-  .script-stage { top: 660px; bottom: auto; left: 4%; width: 440px; height: 248px; }
+     Anchored from the BOTTOM, on purpose: a fixed `top` assumes a
+     minimum window height (it went fully off-screen, invisible, on a
+     shorter real browser window) — bottom-anchoring is always on
+     screen no matter how short the window is. The eye's lash line was
+     measured (by sampling the actual frozen video frame, not a
+     screenshot guess) at ~232px above the bottom edge on a 1440x820
+     window; this box is kept short enough that bottom + height stays
+     under that, with a small margin, so it clears the eye there without
+     needing to spill off the bottom edge to do it. */
+  .script-stage { top: auto; bottom: 48px; left: 4%; width: 440px; height: 170px; }
 }
 
 /* frame source only — never actually shown */
