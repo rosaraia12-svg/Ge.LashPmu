@@ -69,7 +69,7 @@ html, body {
      drawing instead of blank margin, which is what was making it look
      grainy. Fixed pixel size/offset (not vh/%) keeps it legible and
      consistently placed regardless of window height. */
-  .script-stage { top: auto; bottom: 32px; left: 4%; width: 440px; height: 247px; }
+  .script-stage { top: auto; bottom: 10px; left: 4%; width: 440px; height: 247px; }
 }
 
 /* frame source only — never actually shown */
