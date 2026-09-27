@@ -46,6 +46,90 @@ const sctx = scriptCanvas.getContext('2d', { willReadFrequently: true });
 const KEY_LO = 60;
 const KEY_HI = 150;
 
+// ---- Adaptive vertical position (desktop only) ---------------------
+//
+// Earlier this was a hand-picked `top`/`bottom` pixel value in the CSS,
+// tuned by measuring one test window and re-tuned every time it turned
+// out wrong on a different one (invisible on a short window, overlapping
+// the eye on another). That never generalises: the eye's on-screen
+// position is a function of the window's own size and aspect ratio,
+// because .bg-video is object-fit:cover (crops differently per aspect
+// ratio) plus a CSS scale/pan transform.
+//
+// So instead: EYE_SRC_X/Y_FRACTION is a one-time fact about the source
+// video (where the lash line sits within the raw 1280x720 frame — found
+// by sampling the actual rendered frame, not guessed), and
+// positionSignature() re-derives where that point lands on screen for
+// *this* window by replicating the same cover + transform math the
+// browser itself uses for .bg-video, then places the signature a fixed
+// gap below it. Recomputed on resize, so it tracks any window shape.
+const EYE_SRC_X_FRACTION = 0.5;
+const EYE_SRC_Y_FRACTION = 0.72; // lash line measured at ~0.711 down the frame; a little margin added
+
+function positionSignature() {
+  // Mobile has its own fixed bottom lane (see styles.css) that doesn't
+  // depend on the eye's position — leave it alone, just clear any
+  // leftover inline override from a previous wider layout.
+  if (window.innerWidth < 768) {
+    stage.style.top = '';
+    stage.style.bottom = '';
+    stage.style.height = '';
+    stage.style.width = '';
+    return;
+  }
+  if (!eye.videoWidth || !eye.videoHeight) return;
+
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+
+  const cover = Math.max(vw / eye.videoWidth, vh / eye.videoHeight);
+  const sw = vw / cover, sh = vh / cover;
+  const sx = (eye.videoWidth - sw) / 2, sy = (eye.videoHeight - sh) / 2;
+
+  const srcX = eye.videoWidth * EYE_SRC_X_FRACTION;
+  const srcY = eye.videoHeight * EYE_SRC_Y_FRACTION;
+
+  // position within the untransformed, cover-fitted video box
+  let px = (srcX - sx) / sw * vw;
+  let py = (srcY - sy) / sh * vh;
+
+  // apply .bg-video's own CSS transform (the desktop zoom/pan), around
+  // its own transform-origin, exactly as the browser would
+  const matrixStr = getComputedStyle(eye).transform;
+  if (matrixStr && matrixStr !== 'none') {
+    const originStr = getComputedStyle(eye).transformOrigin;
+    const parts = originStr.split(' ').map(parseFloat);
+    const ox = parts[0], oy = parts[1];
+    const m = new DOMMatrix(matrixStr);
+    const mapped = m.transformPoint(new DOMPoint(px - ox, py - oy));
+    px = ox + mapped.x;
+    py = oy + mapped.y;
+  }
+
+  // Clearing the eye always wins: `top` is set from the eye's own
+  // position and never pulled back up to keep the box on-screen. When a
+  // short window leaves too little room below the eye for the box at
+  // its usual size, the box shrinks (both dimensions, same aspect ratio)
+  // to fit instead — so it's always fully visible *and* never
+  // overlapping, at the cost of getting smaller on a short window rather
+  // than staying a fixed size no matter what.
+  const GAP = 24;
+  const BOTTOM_MARGIN = 8;
+  const MAX_HEIGHT = 170;
+  const MIN_HEIGHT = 90;
+  const ASPECT = 440 / 170;
+
+  const top = Math.max(py + GAP, 8);
+  const available = vh - top - BOTTOM_MARGIN;
+  const height = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, available));
+  const width = Math.round(height * ASPECT);
+
+  stage.style.top = top + 'px';
+  stage.style.bottom = 'auto';
+  stage.style.height = height + 'px';
+  stage.style.width = width + 'px';
+}
+
 // #script-stage is now sized snugly to the signature itself (see
 // styles.css), not a large mostly-empty box, so it's cheap to match the
 // screen's own pixel density instead of downscaling: capped at 2x so a
@@ -187,5 +271,18 @@ script.addEventListener('ended', () => {
   pinToEnd(script);
   drawKeyedFrame(); // make sure the canvas holds the true final frame
 });
+
+// Keep the signature's position correct as the window changes shape —
+// metadata load (first paint), and any resize (debounced to one rAF).
+eye.addEventListener('loadedmetadata', positionSignature);
+let resizeRaf = null;
+window.addEventListener('resize', () => {
+  if (resizeRaf) return;
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = null;
+    positionSignature();
+  });
+});
+positionSignature();
 
 })();
