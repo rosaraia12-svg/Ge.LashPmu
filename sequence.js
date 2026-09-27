@@ -145,14 +145,14 @@
     if (sigStarted || !heroFinished || !sigImages) return;
     sigStarted = true;
 
-    // Mobile only (gated in CSS): reveal the copy + listino panel now
-    // that the hero animation has played through.
-    panel.classList.add("is-revealed");
-
     positionSignatureCanvas();
     sigCanvas.classList.add("is-visible");
     animate(SIG_DURATION_MS, sigImages.length, paintSignature, function () {
       paintSignature(sigImages.length - 1);
+      // Mobile only (gated in CSS): reveal the copy + listino panel only
+      // once the signature has finished writing itself out, so on mobile
+      // the signature always arrives before the panel, never together.
+      panel.classList.add("is-revealed");
     });
   }
 

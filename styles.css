@@ -184,10 +184,22 @@ html, body {
 .panel__title--sm { font-size: 1.125rem; font-weight: 500; }
 .panel__lead { margin-top: 0.75rem; font-size: 0.8125rem; line-height: 1.6; color: rgba(59, 34, 40, 0.72); }
 .panel__hint { margin-top: 1.5rem; font-size: 0.6875rem; color: rgba(59, 34, 40, 0.4); }
+.panel__link {
+  align-self: flex-start;
+  margin-top: 1.5rem;
+  font-size: 0.8125rem;
+  color: #3b2228;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(59, 34, 40, 0.35);
+  padding-bottom: 2px;
+  transition: opacity 250ms;
+}
+.panel__link:hover { opacity: 0.6; }
 @media (min-width: 768px) {
   .panel__title { font-size: 1.75rem; }
   .panel__title--sm { font-size: 1.25rem; }
   .panel__lead { font-size: 0.875rem; }
+  .panel__link { font-size: 0.875rem; }
 }
 
 .price-list { list-style: none; margin-top: 0.875rem; display: flex; flex-direction: column; }
@@ -206,7 +218,12 @@ html, body {
 /* ---- Mobile optimisation (<768px) ----------------------- *
  * The panel is already opaque (base rules above); on top of that,
  * small screens hide it until the hero animation ends, so the
- * animation has the screen to itself first. Desktop shows it right away. */
+ * animation has the screen to itself first. Desktop shows it right away.
+ * Signature, then panel: sequence.js reveals .panel only once the
+ * signature has finished writing itself out, and the signature sits
+ * BELOW the panel in stacking order (z-index here is under .hero's 10),
+ * so as the opaque panel fades/slides up it visually covers the
+ * signature rather than the two ever competing for the same space. */
 @media (max-width: 767px) {
   .panel {
     height: 420px;
@@ -230,7 +247,7 @@ html, body {
     width: 260px;
     height: 109px;                   /* signature frames are 1000x420 */
     transform: translateX(-50%);
-    z-index: 20;                     /* bottom lane, above the panel */
+    z-index: 5;                      /* bottom lane, under .hero (10) so the panel covers it once revealed */
   }
 }
 
