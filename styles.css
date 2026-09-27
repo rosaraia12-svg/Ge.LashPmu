@@ -1,7 +1,9 @@
 /* ------------------------------------------------------------------ *
  * Ge.LashPmu — Extension, laminazione e PMU sopracciglia
- * Single-screen, non-scrolling hero. Full-bleed looping background
- * video + real-time refractive "liquid glass" card.
+ * Single-screen, non-scrolling hero. Both animated layers are
+ * canvas-drawn WebP frame sequences (see sequence.js) — same method
+ * used across the other projects, chosen over a <video> element
+ * because it's the one that's actually reliable across real browsers.
  * Palette: rosa / bianco. Testo prugna profondo (#3b2228).
  * ------------------------------------------------------------------ */
 
@@ -12,7 +14,7 @@ html, body {
   width: 100%; height: 100%;
   overflow: hidden;
   overflow-x: hidden;
-  background: #efa7aa;               /* tuned to the video's own pink so any sub-pixel edge gap stays invisible */
+  background: #efa7aa;               /* tuned to the frames' own pink so any sub-pixel edge gap stays invisible */
   color: #3b2228;
   font-family: 'Helvetica Neue Light', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -21,80 +23,42 @@ html, body {
 
 /* Breakpoints follow Tailwind: sm 640, md 768, lg 1024 — all min-width. */
 
-/* ---- Background video --------------------------------------------- */
-/* 100% opacity. No overlay, scrim, tint, gradient or darkening layer
-   over the video at any breakpoint — il video è già rosa. */
-.bg-video {
+/* ---- Hero animation (canvas, frame sequence) ---------------------- *
+ * 100% opacity. No overlay, scrim, tint, gradient or darkening layer
+ * at any breakpoint — the frames are already pink. The "zoomed left,
+ * nose cropped out" framing is baked into the exported frames
+ * themselves (frames-hero/), not a runtime CSS transform — one less
+ * moving part, and it can't disagree with itself the way a transform
+ * computed one way and read back another way did. */
+.hero-canvas {
   position: fixed; top: 0; left: 0;
   display: block;
   width: 100%; height: 100%;
-  object-fit: cover;
   z-index: 0;
-  opacity: 1;
   pointer-events: none;
 }
-@media (min-width: 768px) {
-  /* Zoom the framing toward the left: the cards are opaque now, so
-     nothing needs to show through on the right, and the face can fill
-     more of the screen instead of leaving that side empty. scale()
-     zooms in (cropping the nose sliver at the far left edge along with
-     it); translateX then shifts the whole crop further left so the eye
-     itself sits further left on screen too. */
-  .bg-video { transform: scale(1.4) translateX(-12%); }
-}
 
-/* ---- Second-act cursive signature -------------------------------- *
- * Sits above the eye video, below all UI. The source is white ink on
- * black. sequence.js draws each frame into #script-canvas and rewrites
- * the canvas's own pixel alpha from luminance (black -> transparent,
- * white -> opaque) — plain alpha compositing, not CSS mix-blend-mode,
- * because on Safari that mode was painting the black background as a
- * solid box instead of dropping it. #script-video is only a frame
- * source, kept out of view. Hidden until sequence.js reveals it when
- * the eye ends. */
-.script-stage {
+/* ---- Second-act cursive signature (canvas, frame sequence) -------- *
+ * The source frames are white — sorry, rosa — ink with the black
+ * background already keyed to real alpha transparency at export time
+ * (ffmpeg colorkey, once, per frame), so this is a plain drawImage of
+ * a transparent WebP; no runtime chroma-keying pass needed.
+ * sequence.js positions it (desktop only) from a plain cover-math
+ * calculation of where the eye sits in *this* window — recomputed on
+ * resize — then sizes the box down if a short window doesn't leave
+ * enough room, rather than ever overlapping the eye or running off
+ * screen. Mobile uses the fixed lane below. Hidden until the hero
+ * animation ends. */
+.signature-canvas {
   position: fixed; left: 0;
-  top: 45%;                         /* sit in the lower band, just under the eye */
+  top: 45%;                         /* fallback, before JS positions it */
   width: 100%; height: 50vh;
   z-index: 1;
   pointer-events: none;
   opacity: 0;
   transition: opacity 600ms ease;
 }
-.script-stage.is-visible { opacity: 1; }
-@media (min-width: 768px) {
-  /* Sized to the source video's own 16:9 aspect and snug to the actual
-     signature, not a wide mostly-empty box: sequence.js sizes the canvas
-     off *this* box, so a tight box means its resolution is spent on the
-     drawing instead of blank margin, which is what was making it look
-     grainy.
-     `top` here is only a fallback (no-JS, or before the video's metadata
-     has loaded) — sequence.js's positionSignature() overrides it with a
-     value computed from the eye's actual on-screen position for the
-     current window, recalculated on resize, because no single fixed
-     number here is correct on every window size/shape. */
-  .script-stage { top: 62%; bottom: auto; left: 4%; width: 440px; height: 170px; }
-}
-
-/* frame source only — never actually shown */
-.script-video-source {
-  position: fixed; left: 0; top: 0;
-  width: 2px; height: 2px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.script-canvas, .script-fallback {
-  position: absolute; inset: 0;
-  display: block;
-  width: 100%; height: 100%;
-}
-.script-fallback { object-fit: contain; opacity: 0; transition: opacity 400ms ease; }
-.script-stage.use-fallback .script-canvas { visibility: hidden; }
-.script-stage.use-fallback .script-fallback { opacity: 1; }
-
-/* ---- Liquid-glass filter def ------------------------------------- */
-.glass-defs { position: absolute; width: 0; height: 0; pointer-events: none; }
+.signature-canvas.is-visible { opacity: 1; }
 
 /* ---- Hero shell ------------------------------------------------- */
 .hero {
@@ -163,8 +127,8 @@ html, body {
 }
 
 /* ---- Copy ------------------------------------- *
- * Solid card, not glass — sits over the busiest part of the eye/lash
- * animation, so it stays opaque and legible at every breakpoint. */
+ * Solid card — sits over the busiest part of the eye/lash animation,
+ * so it stays opaque and legible at every breakpoint. */
 .lede {
   max-width: 24rem;
   padding: 1rem 1.15rem 1.25rem;
@@ -184,18 +148,17 @@ html, body {
 @media (min-width: 1024px) { .lede__title { font-size: 2.25rem; } }
 
 /* ---- Right column: listino card ---------------------- *
- * Solid, not glass, so the text stays legible over the animation. The
- * refraction canvas (#dup-image, driven by glass-card.js) still runs
- * underneath but is fully covered by the opaque .card__frost — kept
- * rather than torn out, in case a translucent look comes back later. */
+ * Solid card. It used to also carry a live "liquid glass" refraction
+ * of the video behind it (a duplicated, filtered canvas) — dropped
+ * together with the <video>, since it was already fully hidden behind
+ * this same opaque background and had nothing left to refract. */
 .card {
   position: relative;
   display: flex; flex-direction: column; justify-content: space-between;
   width: 340px; max-width: 100%; height: 460px;
   padding: 2rem;
   border-radius: 48px;
-  overflow: hidden;                          /* clips the duplicate to the card */
-  background: transparent;
+  background: #faf1f2;
   border: 1px solid rgba(120, 60, 75, 0.18);
   box-shadow: 0 16px 40px rgba(59, 34, 40, 0.14);
   pointer-events: auto;
@@ -205,19 +168,6 @@ html, body {
   from { opacity: 0; transform: translateY(28px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
-/* full-viewport-aligned copy of the backdrop; left/top/width/height
-   are written every frame by glass-card.js */
-#dup-video-container { position: absolute; left: 0; top: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-#dup-image { position: absolute; inset: 0; width: 100%; height: 100%; filter: url(#liquid-glass-refraction); }
-
-.card__frost {
-  position: absolute; inset: 0; z-index: 1;
-  border-radius: 48px; pointer-events: none;
-  background: #faf1f2;
-}
-
-.card__head, .card__body, .card__wave { position: relative; z-index: 2; }
 
 .card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
               padding-bottom: 0.75rem; border-bottom: 1px solid rgba(59, 34, 40, 0.1); }
@@ -275,12 +225,12 @@ html, body {
   .card__body { margin-top: 0.85rem; }
   .card__wave { display: none; }
 
-  .script-stage {
+  .signature-canvas {
     top: auto;
     bottom: 0.75rem;
     left: 50%;
     width: 260px;
-    height: 146px;                   /* same 16:9, snug box — see desktop rule */
+    height: 109px;                   /* signature frames are 1000x420 */
     transform: translateX(-50%);
     z-index: 20;                     /* bottom lane, above the card */
   }

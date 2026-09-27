@@ -1,288 +1,239 @@
 /* ------------------------------------------------------------------ *
- * sequence.js — two-act intro choreography.
+ * sequence.js — two-act intro, played from pre-split WebP frames.
  *
- *   1. #bg-video (the eye) autoplays and freezes on its open-eye frame
- *      (that freeze is handled in glass-card.js, which owns the video).
- *   2. When the eye ends, reveal #script-stage and play #script-video
- *      (hidden, used only as a frame source). Each frame is drawn into
- *      #script-canvas and re-keyed: pixel alpha is rewritten from
- *      luminance, so the source's black background becomes genuinely
- *      transparent and the white ink stays opaque. That is plain alpha
- *      compositing — every browser draws a canvas with real per-pixel
- *      alpha the same way, unlike CSS mix-blend-mode, which on Safari
- *      was painting the black background as a solid box instead of
- *      dropping it.
+ * Both "clips" are canvas-drawn frame sequences (frames-hero/,
+ * frames-signature/), not a <video> element — the same method already
+ * used in the other projects, for the same reason: a real <video>
+ * turned out unreliable across real browsers in ways a plain
+ * preload-images-then-draw-them loop is not —
+ *   - autoplay sometimes silently failed to start with no error to
+ *     react to, needing watchdog timers to paper over it;
+ *   - the on-screen position of the video content (for cover-fit crop
+ *     plus a CSS zoom transform) had to be reverse-engineered at
+ *     runtime by parsing the browser's own computed transform matrix,
+ *     which is one more thing that can disagree with what actually
+ *     rendered;
+ *   - removing the signature clip's black background needed a
+ *     getImageData/putImageData pass over every pixel, every frame.
+ * With frames: images either load or fire onerror (deterministic, no
+ * autoplay policy involved), the desired "zoomed left" framing and the
+ * signature's black-to-transparent keying are both baked in once at
+ * export time (see the ffmpeg commands used to produce frames-hero/
+ * and frames-signature/), and playback is just a rAF loop picking an
+ * index to draw — no video decoder, no transform math to reverse.
  *
- * Robustness notes:
- *   - Safari often ignores preload="auto" and may reject a scripted
- *     play() for the second clip, so we force load(), wait for data,
- *     and fall back to the still frame (#script-fallback, keyed the
- *     same way with ffmpeg) on failure or timeout.
- *   - A watchdog also starts the second act if the eye never fires
- *     `ended` (Safari can stall a frame short of the end).
- *
- * This whole file runs inside an IIFE: it is loaded as a classic
- * (non-module) script — so double-clicking index.html works — and
- * classic scripts on the same page share one global scope. Without the
- * wrapper, a name here (canvas, ctx, ...) can silently collide with one
- * in glass-card.js and throw a SyntaxError that stops this file from
- * running at all, with no visible error unless you open devtools.
+ * Sequence: hero plays once and holds its last frame -> signature
+ * reveals, plays once, holds its last frame. On mobile the copy/listino
+ * panel stays hidden until the hero finishes (see styles.css), so the
+ * animation has the screen to itself first.
  * ------------------------------------------------------------------ */
 (function () {
+  "use strict";
 
-const eye = document.getElementById('bg-video');
-const stage = document.getElementById('script-stage');
-const panel = document.getElementById('intro-panel');
-const script = document.getElementById('script-video');
-const scriptCanvas = document.getElementById('script-canvas');
-const sctx = scriptCanvas.getContext('2d', { willReadFrequently: true });
+  var heroCanvas = document.getElementById("hero-canvas");
+  var hctx = heroCanvas.getContext("2d", { alpha: false });
+  var sigCanvas = document.getElementById("signature-canvas");
+  var sctx = sigCanvas.getContext("2d");
+  var panel = document.getElementById("intro-panel");
 
-// Alpha-key thresholds: below LO is fully transparent (the near-black
-// grain of the source), above HI is fully opaque (the ink), linear ramp
-// between. Keyed on the brightest channel rather than average luminance
-// so a saturated colored ink (not just white) still reads as fully
-// opaque — a mid-tone color can have a low average brightness even
-// while one channel is strong.
-const KEY_LO = 60;
-const KEY_HI = 150;
+  var HERO_FOLDER = "./frames-hero/";
+  var HERO_FRAME_COUNT = 120;
+  var HERO_W = 1090, HERO_H = 720;     // frames-hero/*.webp intrinsic size
+  var HERO_DURATION_MS = 10000;        // matches the source clip's own pacing
 
-// ---- Adaptive vertical position (desktop only) ---------------------
-//
-// Earlier this was a hand-picked `top`/`bottom` pixel value in the CSS,
-// tuned by measuring one test window and re-tuned every time it turned
-// out wrong on a different one (invisible on a short window, overlapping
-// the eye on another). That never generalises: the eye's on-screen
-// position is a function of the window's own size and aspect ratio,
-// because .bg-video is object-fit:cover (crops differently per aspect
-// ratio) plus a CSS scale/pan transform.
-//
-// So instead: EYE_SRC_X/Y_FRACTION is a one-time fact about the source
-// video (where the lash line sits within the raw 1280x720 frame — found
-// by sampling the actual rendered frame, not guessed), and
-// positionSignature() re-derives where that point lands on screen for
-// *this* window by replicating the same cover + transform math the
-// browser itself uses for .bg-video, then places the signature a fixed
-// gap below it. Recomputed on resize, so it tracks any window shape.
-const EYE_SRC_X_FRACTION = 0.5;
-const EYE_SRC_Y_FRACTION = 0.72; // lash line measured at ~0.711 down the frame; a little margin added
+  var SIG_FOLDER = "./frames-signature/";
+  var SIG_FRAME_COUNT = 120;
+  var SIG_W = 1000, SIG_H = 420;       // frames-signature/*.webp intrinsic size
+  var SIG_DURATION_MS = 10000;
 
-function positionSignature() {
-  // Mobile has its own fixed bottom lane (see styles.css) that doesn't
-  // depend on the eye's position — leave it alone, just clear any
-  // leftover inline override from a previous wider layout.
-  if (window.innerWidth < 768) {
-    stage.style.top = '';
-    stage.style.bottom = '';
-    stage.style.height = '';
-    stage.style.width = '';
-    return;
-  }
-  if (!eye.videoWidth || !eye.videoHeight) return;
+  // Where the eye's lash line sits within the (already cropped)
+  // hero frame, as a fraction of its own width/height — measured once
+  // by sampling the actual exported frame, not guessed. Used only to
+  // place the signature safely below it; not needed for drawing the
+  // hero itself.
+  var EYE_X_FRACTION = 0.53;
+  var EYE_Y_FRACTION = 0.72;
 
-  const vw = document.documentElement.clientWidth;
-  const vh = document.documentElement.clientHeight;
+  function pad3(i) { return String(i).padStart(3, "0"); }
 
-  const cover = Math.max(vw / eye.videoWidth, vh / eye.videoHeight);
-  const sw = vw / cover, sh = vh / cover;
-  const sx = (eye.videoWidth - sw) / 2, sy = (eye.videoHeight - sh) / 2;
-
-  const srcX = eye.videoWidth * EYE_SRC_X_FRACTION;
-  const srcY = eye.videoHeight * EYE_SRC_Y_FRACTION;
-
-  // position within the untransformed, cover-fitted video box
-  let px = (srcX - sx) / sw * vw;
-  let py = (srcY - sy) / sh * vh;
-
-  // apply .bg-video's own CSS transform (the desktop zoom/pan), around
-  // its own transform-origin, exactly as the browser would
-  const matrixStr = getComputedStyle(eye).transform;
-  if (matrixStr && matrixStr !== 'none') {
-    const originStr = getComputedStyle(eye).transformOrigin;
-    const parts = originStr.split(' ').map(parseFloat);
-    const ox = parts[0], oy = parts[1];
-    const m = new DOMMatrix(matrixStr);
-    const mapped = m.transformPoint(new DOMPoint(px - ox, py - oy));
-    px = ox + mapped.x;
-    py = oy + mapped.y;
-  }
-
-  // Clearing the eye always wins: `top` is set from the eye's own
-  // position and never pulled back up to keep the box on-screen. When a
-  // short window leaves too little room below the eye for the box at
-  // its usual size, the box shrinks (both dimensions, same aspect ratio)
-  // to fit instead — so it's always fully visible *and* never
-  // overlapping, at the cost of getting smaller on a short window rather
-  // than staying a fixed size no matter what.
-  const GAP = 24;
-  const BOTTOM_MARGIN = 8;
-  const MAX_HEIGHT = 170;
-  const MIN_HEIGHT = 90;
-  const ASPECT = 440 / 170;
-
-  const top = Math.max(py + GAP, 8);
-  const available = vh - top - BOTTOM_MARGIN;
-  const height = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, available));
-  const width = Math.round(height * ASPECT);
-
-  stage.style.top = top + 'px';
-  stage.style.bottom = 'auto';
-  stage.style.height = height + 'px';
-  stage.style.width = width + 'px';
-}
-
-// #script-stage is now sized snugly to the signature itself (see
-// styles.css), not a large mostly-empty box, so it's cheap to match the
-// screen's own pixel density instead of downscaling: capped at 2x so a
-// phone doesn't ask for a needlessly huge canvas, and capped in absolute
-// pixels as a backstop. Below this cap the canvas matches the CSS box
-// 1:1, so nothing is ever stretched/blurred to fill it.
-const MAX_CANVAS_HEIGHT = 520;
-
-function pinToEnd(v) {
-  const d = v.duration;
-  if (d && isFinite(d)) {
-    try { v.currentTime = Math.max(0, d - 0.05); } catch (e) { /* not seekable yet */ }
-  }
-  v.pause();
-}
-
-function showFallback() {
-  stage.classList.add('use-fallback');
-}
-
-function resizeCanvasToBox() {
-  const rect = scriptCanvas.getBoundingClientRect();
-  if (rect.height <= 0) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const targetH = Math.min(rect.height * dpr, MAX_CANVAS_HEIGHT);
-  const scale = targetH / rect.height;
-  const w = Math.max(1, Math.round(rect.width * scale));
-  const h = Math.max(1, Math.round(targetH));
-  if (scriptCanvas.width !== w || scriptCanvas.height !== h) {
-    scriptCanvas.width = w;
-    scriptCanvas.height = h;
-  }
-}
-
-let rafId = null;
-function drawKeyedFrame() {
-  if (!script.videoWidth || !script.videoHeight) return;
-
-  resizeCanvasToBox();
-  const cw = scriptCanvas.width, ch = scriptCanvas.height;
-
-  // Reproduce object-fit: contain by hand — canvas has no such CSS knob.
-  const scale = Math.min(cw / script.videoWidth, ch / script.videoHeight);
-  const dw = script.videoWidth * scale;
-  const dh = script.videoHeight * scale;
-  const dx = (cw - dw) / 2;
-  const dy = (ch - dh) / 2;
-
-  sctx.clearRect(0, 0, cw, ch);
-  try {
-    sctx.drawImage(script, dx, dy, dw, dh);
-    const frame = sctx.getImageData(0, 0, cw, ch);
-    const d = frame.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const lum = Math.max(d[i], d[i + 1], d[i + 2]);
-      let a = ((lum - KEY_LO) / (KEY_HI - KEY_LO)) * 255;
-      if (a < 0) a = 0; else if (a > 255) a = 255;
-      d[i + 3] = a;
+  function loadSequence(folder, count, onDone) {
+    var images = new Array(count);
+    var loaded = 0;
+    for (var i = 0; i < count; i++) {
+      (function (idx) {
+        var im = new Image();
+        im.decoding = "async";
+        im.src = folder + pad3(idx + 1) + ".webp";
+        images[idx] = im;
+        var settled = false;
+        function finish() {
+          if (settled) return;
+          settled = true;
+          loaded++;
+          if (loaded === count) onDone(images);
+          // best-effort pre-decode so the first draw of a frame isn't
+          // also the moment it gets decoded; never gates readiness.
+          if (im.decode) im.decode().catch(function () {});
+        }
+        if (im.complete) finish();
+        else im.onload = finish;
+        im.onerror = finish;
+      })(i);
     }
-    sctx.putImageData(frame, 0, 0);
-  } catch (e) {
-    // canvas read blocked for some reason — the still fallback covers us
-    showFallback();
   }
-}
 
-let skipTick = false;
-function frameLoop() {
-  // Re-key at ~half the display's refresh rate — the source is a slow
-  // cursive reveal, so this is not visibly less smooth, and it halves
-  // the per-second cost of the pixel loop on top of the resolution cap.
-  skipTick = !skipTick;
-  if (!skipTick) {
-    drawKeyedFrame();
+  function coverDraw(ctx, img, cw, ch, srcW, srcH) {
+    var cover = Math.max(cw / srcW, ch / srcH);
+    var sw = cw / cover, sh = ch / cover;
+    var sx = (srcW - sw) / 2, sy = (srcH - sh) / 2;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
   }
-  if (!script.paused && !script.ended) {
-    rafId = requestAnimationFrame(frameLoop);
-  }
-}
 
-let started = false;
-function runScript() {
-  if (started) return;
-  started = true;
-
-  // Mobile only (gated in CSS): reveal the copy + listino panel now that
-  // the hero animation has played through, instead of upfront.
-  panel.classList.add('is-revealed');
-
-  stage.classList.add('is-visible');
-
-  let settled = false;
-  const watchdog = setTimeout(() => { if (!settled) { settled = true; showFallback(); } }, 2500);
-  const done = (ok) => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(watchdog);
-    if (ok) {
-      if (rafId) cancelAnimationFrame(rafId);
-      frameLoop();
-    } else {
-      showFallback();
+  function resizeCanvasTo(canvas) {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(1, Math.round(window.innerWidth * dpr));
+    var h = Math.max(1, Math.round(window.innerHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
     }
-  };
+  }
 
-  const go = () => {
-    let p;
-    try { p = script.play(); } catch (e) { done(false); return; }
-    if (p && typeof p.then === 'function') {
-      p.then(() => done(true)).catch(() => done(false));
-    } else {
-      done(true);
+  /* ---------- hero ---------- */
+  var heroImages = null;
+  var heroFrameIdx = 0;
+  var heroFinished = false;
+
+  function paintHero(idx) {
+    if (!heroImages) return;
+    idx = Math.max(0, Math.min(heroImages.length - 1, idx));
+    var img = heroImages[idx];
+    if (!img.complete || !img.naturalWidth) return;
+    heroFrameIdx = idx;
+    resizeCanvasTo(heroCanvas);
+    coverDraw(hctx, img, heroCanvas.width, heroCanvas.height, HERO_W, HERO_H);
+  }
+
+  var heroStarted = false;
+  function playHero() {
+    if (heroStarted || !heroImages) return;
+    heroStarted = true;
+    animate(HERO_DURATION_MS, heroImages.length, paintHero, function () {
+      paintHero(heroImages.length - 1);
+      heroFinished = true;
+      playSignature();
+    });
+  }
+
+  /* ---------- signature ---------- */
+  var sigImages = null;
+  var sigStarted = false;
+
+  function paintSignature(idx) {
+    if (!sigImages) return;
+    idx = Math.max(0, Math.min(sigImages.length - 1, idx));
+    var img = sigImages[idx];
+    if (!img.complete || !img.naturalWidth) return;
+    resizeCanvasTo(sigCanvas);
+    sctx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+    sctx.drawImage(img, 0, 0, sigCanvas.width, sigCanvas.height);
+  }
+
+  function playSignature() {
+    // both the hero-finished flag and the signature frames must be
+    // ready; whichever arrives second is what actually starts it.
+    if (sigStarted || !heroFinished || !sigImages) return;
+    sigStarted = true;
+
+    // Mobile only (gated in CSS): reveal the copy + listino panel now
+    // that the hero animation has played through.
+    panel.classList.add("is-revealed");
+
+    positionSignatureCanvas();
+    sigCanvas.classList.add("is-visible");
+    animate(SIG_DURATION_MS, sigImages.length, paintSignature, function () {
+      paintSignature(sigImages.length - 1);
+    });
+  }
+
+  /* ---------- adaptive position for the signature (desktop only) ---- *
+   * Plain cover-fit arithmetic — the same formula used to draw the hero
+   * frame itself — rather than reading back a CSS transform: it can't
+   * disagree with what's actually on screen because it's the same
+   * calculation, not a second one trying to describe the first. */
+  function positionSignatureCanvas() {
+    if (window.innerWidth < 768) {
+      sigCanvas.style.top = "";
+      sigCanvas.style.left = "";
+      sigCanvas.style.width = "";
+      sigCanvas.style.height = "";
+      return;
     }
-  };
 
-  if (script.readyState >= 2) {
-    go();
-  } else {
-    script.addEventListener('loadeddata', go, { once: true });
-    script.addEventListener('error', () => done(false), { once: true });
-    try { script.load(); } catch (e) { /* ignore */ }
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var cover = Math.max(vw / HERO_W, vh / HERO_H);
+    var sw = vw / cover, sh = vh / cover;
+    var sx = (HERO_W - sw) / 2, sy = (HERO_H - sh) / 2;
+    var eyeX = (HERO_W * EYE_X_FRACTION - sx) / sw * vw;
+    var eyeY = (HERO_H * EYE_Y_FRACTION - sy) / sh * vh;
+
+    // Clearing the eye always wins: `top` is set from the eye's own
+    // position and never pulled back up to keep the box on-screen. If a
+    // short window leaves too little room below the eye for the box at
+    // its usual size, the box shrinks (same aspect ratio) to fit instead
+    // — always fully visible *and* never overlapping, at the cost of
+    // getting smaller on a short window rather than a fixed size no
+    // matter what.
+    var GAP = 24, BOTTOM_MARGIN = 8;
+    var ASPECT = SIG_W / SIG_H;
+    var MAX_WIDTH = 420;
+    var MIN_HEIGHT = 70;
+
+    var top = Math.max(eyeY + GAP, 8);
+    var available = vh - top - BOTTOM_MARGIN;
+    var height = Math.max(MIN_HEIGHT, Math.min(MAX_WIDTH / ASPECT, available));
+    var width = Math.round(height * ASPECT);
+    var left = Math.max(16, Math.min(eyeX - width * 0.35, vw - width - 16));
+
+    sigCanvas.style.top = top + "px";
+    sigCanvas.style.left = left + "px";
+    sigCanvas.style.width = width + "px";
+    sigCanvas.style.height = height + "px";
   }
-}
 
-eye.addEventListener('ended', runScript);
-
-// Watchdog: if the eye never reports `ended`, start the second act anyway
-// a little after its natural length.
-eye.addEventListener('loadedmetadata', () => {
-  if (isFinite(eye.duration)) {
-    setTimeout(() => { if (!started) runScript(); }, (eye.duration + 2) * 1000);
+  /* ---------- rAF tween: eases a frame INDEX over a duration ---------- */
+  function animate(durationMs, frameCount, onFrame, onDone) {
+    var start = null;
+    function step(now) {
+      if (start === null) start = now;
+      var t = Math.min(1, (now - start) / durationMs);
+      onFrame(Math.round(t * (frameCount - 1)));
+      if (t < 1) requestAnimationFrame(step);
+      else onDone();
+    }
+    requestAnimationFrame(step);
   }
-});
 
-let scriptDone = false;
-script.addEventListener('ended', () => {
-  if (scriptDone) return;
-  scriptDone = true;
-  pinToEnd(script);
-  drawKeyedFrame(); // make sure the canvas holds the true final frame
-});
-
-// Keep the signature's position correct as the window changes shape —
-// metadata load (first paint), and any resize (debounced to one rAF).
-eye.addEventListener('loadedmetadata', positionSignature);
-let resizeRaf = null;
-window.addEventListener('resize', () => {
-  if (resizeRaf) return;
-  resizeRaf = requestAnimationFrame(() => {
-    resizeRaf = null;
-    positionSignature();
+  /* ---------- resize: keep both canvases correct as the window changes ---------- */
+  var resizeRaf = null;
+  window.addEventListener("resize", function () {
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(function () {
+      resizeRaf = null;
+      paintHero(heroFrameIdx);
+      positionSignatureCanvas();
+      if (sigImages) paintSignature(sigStarted ? sigImages.length - 1 : 0);
+    });
   });
-});
-positionSignature();
 
+  /* ---------- boot ---------- */
+  loadSequence(HERO_FOLDER, HERO_FRAME_COUNT, function (images) {
+    heroImages = images;
+    paintHero(0);
+    playHero();
+  });
+  loadSequence(SIG_FOLDER, SIG_FRAME_COUNT, function (images) {
+    sigImages = images;
+    playSignature(); // no-op unless the hero already finished waiting on this
+  });
 })();
