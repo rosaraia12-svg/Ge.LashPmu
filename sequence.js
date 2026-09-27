@@ -186,7 +186,7 @@
     // matter what.
     var GAP = 24, BOTTOM_MARGIN = 8;
     var ASPECT = SIG_W / SIG_H;
-    var MAX_WIDTH = 420;
+    var MAX_WIDTH = 480;
     var MIN_HEIGHT = 70;
 
     var top = Math.max(eyeY + GAP, 8);

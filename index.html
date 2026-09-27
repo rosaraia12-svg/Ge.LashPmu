@@ -49,44 +49,64 @@
     <div class="hero-bottom">
       <!-- id="intro-panel": on mobile this whole panel stays hidden until
            the hero animation ends (see sequence.js) so the animation plays
-           uninterrupted first; on desktop it is always visible, grouped
-           on the right so the left side stays clear for the animation. -->
-      <div class="panel" id="intro-panel">
-      <div class="lede">
-        <h1 class="lede__title">Uno sguardo<br />su misura</h1>
-        <p class="lede__body">
-          Extension ciglia, laminazione ciglia e sopracciglia, trucco
-          permanente: trattamenti su misura per uno sguardo intenso,
-          che dura nel tempo.
-        </p>
-      </div>
+           uninterrupted first; on desktop it is always visible, on the
+           right so the left side stays clear for the animation.
+           One card, four scroll-snapped sections (#panel-scroll): the tab
+           row and panel.js both just move .panel__scroll's scroll
+           position, so clicking a tab and scrolling/swiping the panel are
+           the same action seen from two sides — see panel.js. -->
+      <aside class="panel" id="intro-panel">
+        <nav class="panel__tabs" role="tablist" aria-label="Sezioni">
+          <button class="panel__tab is-active" role="tab" aria-selected="true" aria-controls="panel-page-0" data-index="0">Presentazione</button>
+          <button class="panel__tab" role="tab" aria-selected="false" aria-controls="panel-page-1" data-index="1">Ciglia</button>
+          <button class="panel__tab" role="tab" aria-selected="false" aria-controls="panel-page-2" data-index="2">Laminazione</button>
+          <button class="panel__tab" role="tab" aria-selected="false" aria-controls="panel-page-3" data-index="3">Dermo</button>
+        </nav>
 
-      <aside class="card">
-        <div class="card__head">
-          <h2 class="card__title">Il listino</h2>
-          <span class="card__index">//02</span>
+        <div class="panel__scroll" id="panel-scroll">
+          <section class="panel__page" id="panel-page-0" role="tabpanel">
+            <h1 class="panel__title">Uno sguardo<br />su misura</h1>
+            <p class="panel__lead">
+              Extension ciglia, laminazione ciglia e sopracciglia, trucco
+              permanente: trattamenti su misura per uno sguardo intenso,
+              che dura nel tempo.
+            </p>
+            <p class="panel__hint">Scorri per il listino ↓</p>
+          </section>
+
+          <section class="panel__page" id="panel-page-1" role="tabpanel">
+            <h2 class="panel__title panel__title--sm">Extension ciglia</h2>
+            <ul class="price-list">
+              <li class="price-row"><span class="price-row__name">One to one</span><span class="price-row__price">€60</span></li>
+              <li class="price-row"><span class="price-row__name">Volume 2D-5D</span><span class="price-row__price">€70</span></li>
+              <li class="price-row"><span class="price-row__name">Megavolume</span><span class="price-row__price">€80</span></li>
+              <li class="price-row price-row--sub"><span class="price-row__name">Ritocco one to one &amp; volume</span><span class="price-row__price">€50</span></li>
+              <li class="price-row price-row--sub"><span class="price-row__name">Ritocco megavolume</span><span class="price-row__price">€60</span></li>
+            </ul>
+          </section>
+
+          <section class="panel__page" id="panel-page-2" role="tabpanel">
+            <h2 class="panel__title panel__title--sm">Laminazione</h2>
+            <ul class="price-list">
+              <li class="price-row"><span class="price-row__name">Laminazione ciglia</span><span class="price-row__price">€50</span></li>
+              <li class="price-row"><span class="price-row__name">Laminazione sopracciglia</span><span class="price-row__price">€40</span></li>
+              <li class="price-row"><span class="price-row__name">Definizione sopracciglia + tinta</span><span class="price-row__price">€30</span></li>
+            </ul>
+          </section>
+
+          <section class="panel__page" id="panel-page-3" role="tabpanel">
+            <h2 class="panel__title panel__title--sm">Dermopigmentazione</h2>
+            <ul class="price-list">
+              <li class="price-row"><span class="price-row__name">Sopracciglia</span><span class="price-row__price">€350</span></li>
+            </ul>
+            <p class="panel__lead">Trucco permanente a effetto pelo, per sopracciglia definite e naturali.</p>
+          </section>
         </div>
-
-        <div class="card__body">
-          <div class="finding">
-            <h3 class="finding__title">Extension ciglia</h3>
-            <p class="finding__text">One to one, volume 2D-5D o megavolume: da €60, con ritocco da €50.</p>
-          </div>
-          <div class="finding">
-            <h3 class="finding__title">Laminazione & PMU sopracciglia</h3>
-            <p class="finding__text">Laminazione ciglia e sopracciglia, definizione con tinta o dermopigmentazione: da €30.</p>
-          </div>
-        </div>
-
-        <svg class="card__wave" viewBox="0 0 220 50" fill="none" aria-hidden="true">
-          <path d="M0 30 C10 30 12 45 18 45 C24 45 26 10 34 10 C42 10 44 40 52 40 C60 40 62 5 70 5 C78 5 80 42 88 42 C96 42 98 15 106 15 C114 15 116 38 124 38 C132 38 134 20 142 20 C150 20 152 35 160 35 C168 35 170 22 178 22 C186 22 188 32 196 32 C204 32 210 28 220 28"
-                stroke="#3b2228" stroke-width="1.8" stroke-linecap="round" fill="none" />
-        </svg>
       </aside>
-      </div>
     </div>
   </main>
 
   <script src="./sequence.js" defer></script>
+  <script src="./panel.js" defer></script>
 </body>
 </html>
