@@ -251,5 +251,23 @@ html, body {
   }
 }
 
+/* ---- Credit ---------------------------------------------- *
+ * Fixed at the very bottom, centered, on top of everything (z-index 30,
+ * above .hero's 10) — sits in the gap .hero-bottom's own bottom padding
+ * already leaves below the panel (24-48px depending on breakpoint), so
+ * it never overlaps the panel or the signature. */
+.credit {
+  position: fixed;
+  left: 50%; bottom: 0.6rem;
+  transform: translateX(-50%);
+  z-index: 30;
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  color: rgba(59, 34, 40, 0.45);
+  text-decoration: none;
+  transition: opacity 250ms;
+}
+.credit:hover { opacity: 0.65; }
+
 /* ---- Reduced motion ------------------------------------- */
 @media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; } }

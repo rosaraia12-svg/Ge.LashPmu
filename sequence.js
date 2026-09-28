@@ -118,11 +118,9 @@
   function playHero() {
     if (heroStarted || !heroImages) return;
     heroStarted = true;
-    console.log("DEBUG heroStart", performance.now());
     animate(HERO_DURATION_MS, heroImages.length, paintHero, function () {
       paintHero(heroImages.length - 1);
       heroFinished = true;
-      console.log("DEBUG heroFinished", performance.now());
       playSignature();
     });
   }
@@ -149,10 +147,8 @@
 
     positionSignatureCanvas();
     sigCanvas.classList.add("is-visible");
-    console.log("DEBUG sigStart", performance.now());
     animate(SIG_DURATION_MS, sigImages.length, paintSignature, function () {
       paintSignature(sigImages.length - 1);
-      console.log("DEBUG sigFinished", performance.now());
       // Mobile only (gated in CSS): reveal the copy + listino panel only
       // once the signature has finished writing itself out, so on mobile
       // the signature always arrives before the panel, never together.
